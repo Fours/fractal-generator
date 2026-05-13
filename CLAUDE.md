@@ -46,6 +46,10 @@ That's it — no other files need changes. The worker and `FractalCanvas` are fr
   - **Sierpinski**: deterministic recursive subdivision. Leaves are bucketed into 32 color bands by centroid x and emitted into 32 `Path2D`s — one `ctx.fill` per band, not per triangle.
   - **Barnsley Fern**: chaos game with a Uint32 hit-counter per pixel, then `t = log(1 + count) / log(1 + maxCount)` for log-density coloring. First 20 iterations dropped as warmup.
 
+### User presets
+
+`ControlPanel` exposes a "User presets" section (top of the scroll body) for saving named snapshots of `{ fractalId, params }`. Persisted to `localStorage` under the key `fractal-generator:presets` as `Record<name, Preset>`. Save flow uses `window.prompt` for the name and `window.confirm` for overwrite; the load flow merges the saved params over the target fractal's `getDefaults(...)` so missing keys (e.g. a param added after the preset was saved) fall back to defaults instead of becoming `undefined`. A `useEffect` on `presets` is the single writer to `localStorage` — don't write from event handlers. Load is guarded by `fractals.find(f => f.id === preset.fractalId)`; a preset referencing a removed fractal is silently ignored.
+
 ### Styling
 
 CSS lives next to its component (`App.css`, `ControlPanel.css`). Theme tokens (`--bg`, `--panel`, `--accent`, `--font-mono`, etc.) are defined as CSS custom properties on `:root` in `App.css` — reuse them rather than hardcoding the teal accent or panel grays. The aesthetic is dark, sleek, "lab instrument": monospace font for labels/values, thin borders, teal-300 (`#5eead4`) accent.

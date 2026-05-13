@@ -1,8 +1,29 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { fractals, getDefaults, type ParamDef } from './fractals';
 import './ControlPanel.css';
 
 type ParamValue = number | string;
+
+interface Preset {
+  fractalId: string;
+  params: Record<string, ParamValue>;
+}
+
+const PRESETS_STORAGE_KEY = 'fractal-generator:presets';
+
+function loadPresets(): Record<string, Preset> {
+  try {
+    const raw = localStorage.getItem(PRESETS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, Preset>;
+    }
+    return {};
+  } catch {
+    return {};
+  }
+}
 
 interface ControlPanelProps {
   onGenerate: (fractalId: string, params: Record<string, ParamValue>) => void;
@@ -13,6 +34,22 @@ export function ControlPanel({ onGenerate, disabled = false }: ControlPanelProps
   const [fractalId, setFractalId] = useState(fractals[0].id);
   const fractal = fractals.find(f => f.id === fractalId)!;
   const [params, setParams] = useState<Record<string, ParamValue>>(() => getDefaults(fractal));
+
+  const [presets, setPresets] = useState<Record<string, Preset>>(loadPresets);
+  const [selectedPreset, setSelectedPreset] = useState<string>(() => {
+    const names = Object.keys(loadPresets()).sort();
+    return names[0] ?? '';
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(presets));
+    } catch {
+      // localStorage may be unavailable or full — silently skip
+    }
+  }, [presets]);
+
+  const presetNames = Object.keys(presets).sort();
 
   const handleFractalChange = (id: string) => {
     const next = fractals.find(f => f.id === id);
@@ -25,6 +62,25 @@ export function ControlPanel({ onGenerate, disabled = false }: ControlPanelProps
     setParams(prev => ({ ...prev, [key]: value }));
   };
 
+  const handleSaveAs = () => {
+    const input = window.prompt('Save preset as…');
+    if (input === null) return;
+    const name = input.trim();
+    if (!name) return;
+    if (presets[name] && !window.confirm(`Overwrite preset "${name}"?`)) return;
+    setPresets(prev => ({ ...prev, [name]: { fractalId, params } }));
+    setSelectedPreset(name);
+  };
+
+  const handleLoadPreset = () => {
+    const preset = presets[selectedPreset];
+    if (!preset) return;
+    const next = fractals.find(f => f.id === preset.fractalId);
+    if (!next) return;
+    setFractalId(preset.fractalId);
+    setParams({ ...getDefaults(next), ...preset.params });
+  };
+
   return (
     <aside className="control-panel">
       <header className="cp-header">
@@ -33,6 +89,35 @@ export function ControlPanel({ onGenerate, disabled = false }: ControlPanelProps
       </header>
 
       <div className="cp-scroll">
+        <section className="cp-section">
+          <label className="cp-section-label">User presets</label>
+          <select
+            className="cp-select"
+            value={selectedPreset}
+            onChange={e => setSelectedPreset(e.target.value)}
+            disabled={presetNames.length === 0}
+          >
+            {presetNames.length === 0 ? (
+              <option value="">— no presets saved —</option>
+            ) : (
+              presetNames.map(n => <option key={n} value={n}>{n}</option>)
+            )}
+          </select>
+          <div className="cp-preset-actions">
+            <button
+              type="button"
+              className="cp-button"
+              onClick={handleLoadPreset}
+              disabled={!selectedPreset || !presets[selectedPreset]}
+            >
+              Load
+            </button>
+            <button type="button" className="cp-button" onClick={handleSaveAs}>
+              Save as…
+            </button>
+          </div>
+        </section>
+
         <section className="cp-section">
           <label className="cp-section-label">Fractal type</label>
           <select
