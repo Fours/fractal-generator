@@ -9,6 +9,7 @@ interface RenderFractalMessage {
     width: number;
     height: number;
     requestId: number;
+    frameIndex: number;
   };
 }
 
@@ -20,7 +21,7 @@ ctx.onmessage = (e: MessageEvent<InboundMessage>) => {
   const msg = e.data;
   if (!msg || msg.name !== 'RenderFractal') return;
 
-  const { fractalType, fractalParams, width, height, requestId } = msg.data;
+  const { fractalType, fractalParams, width, height, requestId, frameIndex } = msg.data;
 
   const canvas = new OffscreenCanvas(Math.max(1, width), Math.max(1, height));
   const start = performance.now();
@@ -31,7 +32,7 @@ ctx.onmessage = (e: MessageEvent<InboundMessage>) => {
   ctx.postMessage(
     {
       name: 'FractalRendered',
-      data: { bitmap, width, height, elapsedMs, requestId },
+      data: { bitmap, width, height, elapsedMs, requestId, frameIndex },
     },
     { transfer: [bitmap] },
   );

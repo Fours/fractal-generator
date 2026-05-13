@@ -25,8 +25,17 @@ function loadPresets(): Record<string, Preset> {
   }
 }
 
+export interface AnimationConfig {
+  zoomDelta: number;
+  frames: number;
+}
+
 interface ControlPanelProps {
-  onGenerate: (fractalId: string, params: Record<string, ParamValue>) => void;
+  onGenerate: (
+    fractalId: string,
+    params: Record<string, ParamValue>,
+    animation: AnimationConfig | null,
+  ) => void;
   disabled?: boolean;
 }
 
@@ -34,6 +43,10 @@ export function ControlPanel({ onGenerate, disabled = false }: ControlPanelProps
   const [fractalId, setFractalId] = useState(fractals[0].id);
   const fractal = fractals.find(f => f.id === fractalId)!;
   const [params, setParams] = useState<Record<string, ParamValue>>(() => getDefaults(fractal));
+
+  const [animationEnabled, setAnimationEnabled] = useState(false);
+  const [zoomDelta, setZoomDelta] = useState(0.1);
+  const [frameCount, setFrameCount] = useState(10);
 
   const [presets, setPresets] = useState<Record<string, Preset>>(loadPresets);
   const [selectedPreset, setSelectedPreset] = useState<string>(() => {
@@ -145,12 +158,59 @@ export function ControlPanel({ onGenerate, disabled = false }: ControlPanelProps
             ))}
           </div>
         </section>
+
+        <section className="cp-section">
+          <label className="cp-section-label">Animate</label>
+          <label className="cp-toggle">
+            <input
+              type="checkbox"
+              checked={animationEnabled}
+              onChange={e => setAnimationEnabled(e.target.checked)}
+            />
+            <span>Animation mode</span>
+          </label>
+          {animationEnabled && (
+            <div className="cp-params cp-animate-params">
+              <div className="cp-param">
+                <label className="cp-param-label">Zoom delta</label>
+                <input
+                  type="number"
+                  className="cp-input"
+                  step={0.1}
+                  value={zoomDelta}
+                  onChange={e => setZoomDelta(Number(e.target.value))}
+                />
+              </div>
+              <div className="cp-param">
+                <label className="cp-param-label">Frames</label>
+                <input
+                  type="number"
+                  className="cp-input"
+                  step={1}
+                  min={1}
+                  max={240}
+                  value={frameCount}
+                  onChange={e => {
+                    const n = Math.max(1, Math.floor(Number(e.target.value) || 1));
+                    setFrameCount(n);
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </section>
       </div>
 
       <button
         type="button"
         className="cp-generate"
-        onClick={() => onGenerate(fractalId, params)}
+        onClick={() =>
+          onGenerate(
+            fractalId,
+            params,
+            animationEnabled ? { zoomDelta, frames: frameCount } : null,
+          )
+        }
         disabled={disabled}
       >
         <span className="cp-generate-label">Generate</span>

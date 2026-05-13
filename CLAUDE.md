@@ -17,13 +17,13 @@ No test runner is configured.
 
 ## Architecture
 
-Data flow is one-shot snapshot: `ControlPanel` owns *current* params; `App` holds the most recent **submitted** `RenderRequest` (`{ id, fractalId, params }`) plus a `rendering` flag; `FractalCanvas` reacts to `request` changes and dispatches the render to a Web Worker. The `id` (a `Date.now()` value) ensures identical-param resubmits still fire a new render, and also doubles as a stale-result guard for worker responses.
+Data flow is one-shot snapshot: `ControlPanel` owns *current* params; `App` holds the most recent **submitted** `RenderRequest` (`{ id, fractalId, params, animation }`) plus a `rendering` flag; `FractalCanvas` reacts to `request` changes and dispatches the render(s) to a Web Worker. The `id` (a `Date.now()` value) ensures identical-param resubmits still fire a new render, and also doubles as a stale-result guard for worker responses. When `animation` is non-null, `FractalCanvas` expands the request into N per-frame renders (see **Animation mode** below).
 
 Four layers, each in a flat file under `src/`:
 
 1. **`fractals.ts`** — declarative `FractalDef[]`: id, display name, formula string, and a list of `ParamDef`s (`number` | `slider` | `select`). `getDefaults()` produces the initial params object. The control panel renders inputs by switching on `ParamDef.type` — no fractal-specific UI code.
 2. **`renderers.ts`** — `renderFractal(canvas, fractalId, params)` switches on `fractalId` to dispatch to a per-fractal function. **The `canvas` parameter is an `OffscreenCanvas`** (not an `HTMLCanvasElement`) — renderers run inside the worker. Each renderer reads its expected params off the loose `Record<string, number | string>` (no shared typed shape — the control panel and renderer agree by string key).
-3. **`fractal.worker.ts`** — dedicated module Worker. Receives `{ name: "RenderFractal", data: { fractalType, fractalParams, width, height, requestId } }`, creates an `OffscreenCanvas` of the given size, calls `renderFractal`, then transfers an `ImageBitmap` back as `{ name: "FractalRendered", data: { bitmap, width, height, elapsedMs, requestId } }`.
+3. **`fractal.worker.ts`** — dedicated module Worker. Receives `{ name: "RenderFractal", data: { fractalType, fractalParams, width, height, requestId, frameIndex } }`, creates an `OffscreenCanvas` of the given size, calls `renderFractal`, then transfers an `ImageBitmap` back as `{ name: "FractalRendered", data: { bitmap, width, height, elapsedMs, requestId, frameIndex } }`. The worker is fire-and-forget: `FractalCanvas` only ever has one frame in flight (it posts the next frame on receipt of the previous), so the worker processes messages serially without an internal queue.
 4. **`palettes.ts`** — palette name → `(t: number) => [r,g,b]`. Palettes are multi-stop gradients built by `makeGradient`.
 
 ### Adding a new fractal type
@@ -45,6 +45,19 @@ That's it — no other files need changes. The worker and `FractalCanvas` are fr
   - **Newton**: each root gets a fixed color sampled at `(k + 0.5)/n` of the palette; the chosen color is darkened by iteration count (floor 0.22).
   - **Sierpinski**: deterministic recursive subdivision. Leaves are bucketed into 32 color bands by centroid x and emitted into 32 `Path2D`s — one `ctx.fill` per band, not per triangle.
   - **Barnsley Fern**: chaos game with a Uint32 hit-counter per pixel, then `t = log(1 + count) / log(1 + maxCount)` for log-density coloring. First 20 iterations dropped as warmup.
+
+### Animation mode
+
+`ControlPanel` exposes an "Animate" section with a toggle (`animationEnabled`) and two inputs: `zoomDelta` (any number, ±) and `frames` (integer ≥ 1). When the toggle is on, `onGenerate` passes an `AnimationConfig` (`{ zoomDelta, frames }`) instead of `null`, which `App` attaches to the `RenderRequest` as `animation`.
+
+`FractalCanvas` orchestrates animation playback (the worker stays single-frame and fractal-agnostic):
+
+1. **Frame expansion** — on a request with `animation`, build N param sets where frame *i* uses `{ ...params, zoom: baseZoom + i * zoomDelta }` (`baseZoom = params.zoom` or 0 if absent).
+2. **Serial render** — only one frame is in flight at a time. `sendFrame(0)` posts frame 0; on each `FractalRendered` response, store the bitmap at `frameIndex` and post frame `frameIndex + 1`. The render-phase overlay shows `rendering frame k/N…`. `setRendering(false)` is delayed until all frames are stored, so Generate stays disabled until rendering completes.
+3. **Playback** — once all bitmaps are stored, `startPlayback` cycles frames at **1 fps** (`PLAYBACK_INTERVAL_MS = 1000`) via `setInterval`. Each frame is crossfaded in over **100 ms** (`FRAME_FADE_MS = 100`) using `requestAnimationFrame`: each tick `clearRect`s, draws the prior frame at `globalAlpha = 1`, then the next at `globalAlpha = t` (t = elapsed/100, clamped). The first animation frame fades in from black (`priorFrameRef = null`). Single-frame (non-animation) renders bypass the fade and draw instantly.
+4. **Teardown** — on a new request or unmount, `stopPlayback` clears the interval, cancels the in-flight RAF, and resets `priorFrameRef`; `closeBitmaps` calls `.close()` on every stored `ImageBitmap`. The `requestId` guard in `onmessage` discards any late frame from a superseded animation (`bitmap.close()`).
+
+Only Mandelbrot, Julia, Burning Ship, and Newton use the `zoom` param — animating Sierpinski or Barnsley Fern produces N identical frames since their renderers ignore zoom.
 
 ### User presets
 
