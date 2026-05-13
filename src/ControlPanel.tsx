@@ -6,9 +6,10 @@ type ParamValue = number | string;
 
 interface ControlPanelProps {
   onGenerate: (fractalId: string, params: Record<string, ParamValue>) => void;
+  disabled?: boolean;
 }
 
-export function ControlPanel({ onGenerate }: ControlPanelProps) {
+export function ControlPanel({ onGenerate, disabled = false }: ControlPanelProps) {
   const [fractalId, setFractalId] = useState(fractals[0].id);
   const fractal = fractals.find(f => f.id === fractalId)!;
   const [params, setParams] = useState<Record<string, ParamValue>>(() => getDefaults(fractal));
@@ -65,6 +66,7 @@ export function ControlPanel({ onGenerate }: ControlPanelProps) {
         type="button"
         className="cp-generate"
         onClick={() => onGenerate(fractalId, params)}
+        disabled={disabled}
       >
         <span className="cp-generate-label">Generate</span>
       </button>

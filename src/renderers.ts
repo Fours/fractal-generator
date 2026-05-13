@@ -3,7 +3,7 @@ import { getPalette } from './palettes';
 export type ParamValues = Record<string, number | string>;
 
 export function renderFractal(
-  canvas: HTMLCanvasElement,
+  canvas: OffscreenCanvas,
   fractalId: string,
   params: ParamValues,
 ): void {
@@ -31,14 +31,14 @@ export function renderFractal(
   }
 }
 
-function clearCanvas(canvas: HTMLCanvasElement) {
+function clearCanvas(canvas: OffscreenCanvas) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
-function renderMandelbrot(canvas: HTMLCanvasElement, params: ParamValues) {
+function renderMandelbrot(canvas: OffscreenCanvas, params: ParamValues) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
@@ -111,7 +111,7 @@ function renderMandelbrot(canvas: HTMLCanvasElement, params: ParamValues) {
   ctx.putImageData(imageData, 0, 0);
 }
 
-function renderJulia(canvas: HTMLCanvasElement, params: ParamValues) {
+function renderJulia(canvas: OffscreenCanvas, params: ParamValues) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
@@ -178,7 +178,7 @@ function renderJulia(canvas: HTMLCanvasElement, params: ParamValues) {
   ctx.putImageData(imageData, 0, 0);
 }
 
-function renderBarnsleyFern(canvas: HTMLCanvasElement, params: ParamValues) {
+function renderBarnsleyFern(canvas: OffscreenCanvas, params: ParamValues) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
@@ -279,7 +279,7 @@ function renderBarnsleyFern(canvas: HTMLCanvasElement, params: ParamValues) {
   ctx.putImageData(imageData, 0, 0);
 }
 
-function renderSierpinski(canvas: HTMLCanvasElement, params: ParamValues) {
+function renderSierpinski(canvas: OffscreenCanvas, params: ParamValues) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
@@ -343,7 +343,7 @@ function renderSierpinski(canvas: HTMLCanvasElement, params: ParamValues) {
   }
 }
 
-function renderBurningShip(canvas: HTMLCanvasElement, params: ParamValues) {
+function renderBurningShip(canvas: OffscreenCanvas, params: ParamValues) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
@@ -418,7 +418,7 @@ const NEWTON_DEGREES: Record<string, number> = {
   'z6-1': 6,
 };
 
-function renderNewton(canvas: HTMLCanvasElement, params: ParamValues) {
+function renderNewton(canvas: OffscreenCanvas, params: ParamValues) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 

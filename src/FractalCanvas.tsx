@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { renderFractal, type ParamValues } from './renderers';
+import type { ParamValues } from './renderers';
 
 export interface RenderRequest {
   id: number;
@@ -7,9 +7,27 @@ export interface RenderRequest {
   params: ParamValues;
 }
 
-export function FractalCanvas({ request }: { request: RenderRequest | null }) {
+interface FractalRenderedMessage {
+  name: 'FractalRendered';
+  data: {
+    bitmap: ImageBitmap;
+    width: number;
+    height: number;
+    elapsedMs: number;
+    requestId: number;
+  };
+}
+
+interface FractalCanvasProps {
+  request: RenderRequest | null;
+  onRenderingChange?: (rendering: boolean) => void;
+}
+
+export function FractalCanvas({ request, onRenderingChange }: FractalCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const workerRef = useRef<Worker | null>(null);
+  const latestRequestIdRef = useRef<number>(0);
   const [rendering, setRendering] = useState(false);
   const [elapsedMs, setElapsedMs] = useState<number | null>(null);
 
@@ -34,11 +52,53 @@ export function FractalCanvas({ request }: { request: RenderRequest | null }) {
     return () => ro.disconnect();
   }, []);
 
+  // Spin up the worker once.
+  useEffect(() => {
+    const worker = new Worker(new URL('./fractal.worker.ts', import.meta.url), {
+      type: 'module',
+    });
+    workerRef.current = worker;
+
+    worker.onmessage = (e: MessageEvent<FractalRenderedMessage>) => {
+      const msg = e.data;
+      if (!msg || msg.name !== 'FractalRendered') return;
+      const { bitmap, elapsedMs: dt, requestId } = msg.data;
+
+      // Discard stale results (StrictMode double-fire, resize-triggered re-renders, etc.)
+      if (requestId !== latestRequestIdRef.current) {
+        bitmap.close();
+        return;
+      }
+
+      const canvas = canvasRef.current;
+      if (!canvas) {
+        bitmap.close();
+        return;
+      }
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        bitmap.close();
+        return;
+      }
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      bitmap.close();
+      setElapsedMs(dt);
+      setRendering(false);
+    };
+
+    return () => {
+      worker.terminate();
+      workerRef.current = null;
+    };
+  }, []);
+
   useEffect(() => {
     if (!request) return;
     const canvas = canvasRef.current;
     const container = containerRef.current;
-    if (!canvas || !container) return;
+    const worker = workerRef.current;
+    if (!canvas || !container || !worker) return;
 
     // Re-sync size at render time in case container changed.
     const w = Math.max(1, container.clientWidth);
@@ -48,28 +108,26 @@ export function FractalCanvas({ request }: { request: RenderRequest | null }) {
       canvas.height = h;
     }
 
+    latestRequestIdRef.current = request.id;
     setRendering(true);
     setElapsedMs(null);
 
-    // Two RAFs so the overlay paints before we block the main thread.
-    let cancelled = false;
-    const raf1 = requestAnimationFrame(() => {
-      const raf2 = requestAnimationFrame(() => {
-        if (cancelled) return;
-        const start = performance.now();
-        renderFractal(canvas, request.fractalId, request.params);
-        const dt = performance.now() - start;
-        setElapsedMs(dt);
-        setRendering(false);
-      });
-      return () => cancelAnimationFrame(raf2);
+    const superscale = 2;
+    worker.postMessage({
+      name: 'RenderFractal',
+      data: {
+        fractalType: request.fractalId,
+        fractalParams: request.params,
+        width: w * superscale,
+        height: h * superscale,
+        requestId: request.id,
+      },
     });
-
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(raf1);
-    };
   }, [request]);
+
+  useEffect(() => {
+    onRenderingChange?.(rendering);
+  }, [rendering, onRenderingChange]);
 
   return (
     <div className="canvas-area" ref={containerRef}>
@@ -81,10 +139,13 @@ export function FractalCanvas({ request }: { request: RenderRequest | null }) {
         </div>
       )}
       {rendering && (
-        <div className="canvas-overlay">
-          <span className="canvas-overlay-dot" />
-          <span>rendering…</span>
-        </div>
+        <>
+          <div className="canvas-overlay">
+            <span className="canvas-overlay-dot" />
+            <span>rendering…</span>
+          </div>
+          <div className="canvas-spinner" aria-label="rendering" role="status" />
+        </>
       )}
       {!rendering && elapsedMs !== null && (
         <div className="canvas-stat">{elapsedMs.toFixed(0)} ms</div>

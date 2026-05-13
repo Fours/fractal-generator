@@ -5,6 +5,7 @@ import { FractalCanvas, type RenderRequest } from './FractalCanvas';
 
 function App() {
   const [request, setRequest] = useState<RenderRequest | null>(null);
+  const [rendering, setRendering] = useState(false);
 
   const handleGenerate = (fractalId: string, params: Record<string, number | string>) => {
     setRequest({ id: Date.now(), fractalId, params });
@@ -12,8 +13,8 @@ function App() {
 
   return (
     <div className="app">
-      <FractalCanvas request={request} />
-      <ControlPanel onGenerate={handleGenerate} />
+      <FractalCanvas request={request} onRenderingChange={setRendering} />
+      <ControlPanel onGenerate={handleGenerate} disabled={rendering} />
     </div>
   );
 }

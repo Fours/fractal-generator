@@ -258,6 +258,22 @@
     var(--panel-2);
 }
 
+.cp-generate:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  color: var(--accent);
+  background:
+    linear-gradient(180deg, rgba(94, 234, 212, 0.10), rgba(45, 212, 191, 0.05)),
+    var(--panel-2);
+}
+
+.cp-generate:disabled:hover {
+  color: var(--accent);
+  background:
+    linear-gradient(180deg, rgba(94, 234, 212, 0.10), rgba(45, 212, 191, 0.05)),
+    var(--panel-2);
+}
+
 .cp-generate-label {
   position: relative;
   display: inline-block;
