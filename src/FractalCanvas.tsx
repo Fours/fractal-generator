@@ -26,7 +26,7 @@ interface FractalCanvasProps {
 }
 
 const PLAYBACK_INTERVAL_MS = 1000; // 1 fps
-const FRAME_FADE_MS = 100;
+const FRAME_FADE_MS = 200;
 
 export function FractalCanvas({ request, onRenderingChange }: FractalCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
