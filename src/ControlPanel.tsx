@@ -45,7 +45,7 @@ export function ControlPanel({ onGenerate, disabled = false }: ControlPanelProps
   const [params, setParams] = useState<Record<string, ParamValue>>(() => getDefaults(fractal));
 
   const [animationEnabled, setAnimationEnabled] = useState(false);
-  const [zoomDelta, setZoomDelta] = useState(0.1);
+  const [zoomDelta, setZoomDelta] = useState(1);
   const [frameCount, setFrameCount] = useState(10);
 
   const [presets, setPresets] = useState<Record<string, Preset>>(loadPresets);
@@ -172,11 +172,13 @@ export function ControlPanel({ onGenerate, disabled = false }: ControlPanelProps
           {animationEnabled && (
             <div className="cp-params cp-animate-params">
               <div className="cp-param">
-                <label className="cp-param-label">Zoom delta</label>
+                <label className="cp-param-label">Zoom delta percent</label>
                 <input
                   type="number"
                   className="cp-input"
-                  step={0.1}
+                  step={1}
+                  min={-100}
+                  max={100}
                   value={zoomDelta}
                   onChange={e => setZoomDelta(Number(e.target.value))}
                 />

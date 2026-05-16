@@ -247,10 +247,15 @@ export function FractalCanvas({ request, onRenderingChange }: FractalCanvasProps
       const baseZoom =
         typeof request.params.zoom === 'number' ? request.params.zoom : 0;
       const payloads: { fractalId: string; params: ParamValues }[] = [];
+      const zoomMultiplier = (100 + animation!.zoomDelta)/100;
+      let zoom = baseZoom;
       for (let i = 0; i < animFrames; i++) {
+        if (i > 0) {
+            zoom = zoom * zoomMultiplier
+        }
         payloads.push({
           fractalId: request.fractalId,
-          params: { ...request.params, zoom: baseZoom + i * animation!.zoomDelta },
+          params: { ...request.params, zoom: zoom },
         });
       }
       framePayloadsRef.current = payloads;
