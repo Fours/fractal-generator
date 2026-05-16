@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { fractals, getDefaults, type ParamDef } from './fractals';
 import './ControlPanel.css';
 
-type ParamValue = number | string;
+export type ParamValue = number | string;
 
 interface Preset {
   fractalId: string;
@@ -31,18 +31,27 @@ export interface AnimationConfig {
 }
 
 interface ControlPanelProps {
-  onGenerate: (
-    fractalId: string,
-    params: Record<string, ParamValue>,
-    animation: AnimationConfig | null,
-  ) => void;
+  fractalId: string;
+  onFractalChange: (id: string) => void;
+  params: Record<string, ParamValue>;
+  onParamsChange: (params: Record<string, ParamValue>) => void;
+  useCrosshair: boolean;
+  onUseCrosshairChange: (v: boolean) => void;
+  onGenerate: (animation: AnimationConfig | null) => void;
   disabled?: boolean;
 }
 
-export function ControlPanel({ onGenerate, disabled = false }: ControlPanelProps) {
-  const [fractalId, setFractalId] = useState(fractals[0].id);
+export function ControlPanel({
+  fractalId,
+  onFractalChange,
+  params,
+  onParamsChange,
+  useCrosshair,
+  onUseCrosshairChange,
+  onGenerate,
+  disabled = false,
+}: ControlPanelProps) {
   const fractal = fractals.find(f => f.id === fractalId)!;
-  const [params, setParams] = useState<Record<string, ParamValue>>(() => getDefaults(fractal));
 
   const [animationEnabled, setAnimationEnabled] = useState(false);
   const [zoomDelta, setZoomDelta] = useState(1);
@@ -64,15 +73,8 @@ export function ControlPanel({ onGenerate, disabled = false }: ControlPanelProps
 
   const presetNames = Object.keys(presets).sort();
 
-  const handleFractalChange = (id: string) => {
-    const next = fractals.find(f => f.id === id);
-    if (!next) return;
-    setFractalId(id);
-    setParams(getDefaults(next));
-  };
-
   const setParam = (key: string, value: ParamValue) => {
-    setParams(prev => ({ ...prev, [key]: value }));
+    onParamsChange({ ...params, [key]: value });
   };
 
   const handleSaveAs = () => {
@@ -90,8 +92,8 @@ export function ControlPanel({ onGenerate, disabled = false }: ControlPanelProps
     if (!preset) return;
     const next = fractals.find(f => f.id === preset.fractalId);
     if (!next) return;
-    setFractalId(preset.fractalId);
-    setParams({ ...getDefaults(next), ...preset.params });
+    onFractalChange(preset.fractalId);
+    onParamsChange({ ...getDefaults(next), ...preset.params });
   };
 
   return (
@@ -136,7 +138,7 @@ export function ControlPanel({ onGenerate, disabled = false }: ControlPanelProps
           <select
             className="cp-select cp-select-main"
             value={fractalId}
-            onChange={e => handleFractalChange(e.target.value)}
+            onChange={e => onFractalChange(e.target.value)}
           >
             {fractals.map(f => (
               <option key={f.id} value={f.id}>{f.name}</option>
@@ -149,12 +151,23 @@ export function ControlPanel({ onGenerate, disabled = false }: ControlPanelProps
           <label className="cp-section-label">Parameters</label>
           <div className="cp-params">
             {fractal.params.map(p => (
-              <ParamControl
-                key={p.key}
-                param={p}
-                value={params[p.key]}
-                onChange={v => setParam(p.key, v)}
-              />
+              <Fragment key={p.key}>
+                {p.key === 'centerX' && (
+                  <label className="cp-toggle">
+                    <input
+                      type="checkbox"
+                      checked={useCrosshair}
+                      onChange={e => onUseCrosshairChange(e.target.checked)}
+                    />
+                    <span>Use Crosshair</span>
+                  </label>
+                )}
+                <ParamControl
+                  param={p}
+                  value={params[p.key]}
+                  onChange={v => setParam(p.key, v)}
+                />
+              </Fragment>
             ))}
           </div>
         </section>
@@ -207,11 +220,7 @@ export function ControlPanel({ onGenerate, disabled = false }: ControlPanelProps
         type="button"
         className="cp-generate"
         onClick={() =>
-          onGenerate(
-            fractalId,
-            params,
-            animationEnabled ? { zoomDelta, frames: frameCount } : null,
-          )
+          onGenerate(animationEnabled ? { zoomDelta, frames: frameCount } : null)
         }
         disabled={disabled}
       >

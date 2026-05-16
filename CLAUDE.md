@@ -17,7 +17,7 @@ No test runner is configured.
 
 ## Architecture
 
-Data flow is one-shot snapshot: `ControlPanel` owns *current* params; `App` holds the most recent **submitted** `RenderRequest` (`{ id, fractalId, params, animation }`) plus a `rendering` flag; `FractalCanvas` reacts to `request` changes and dispatches the render(s) to a Web Worker. The `id` (a `Date.now()` value) ensures identical-param resubmits still fire a new render, and also doubles as a stale-result guard for worker responses. When `animation` is non-null, `FractalCanvas` expands the request into N per-frame renders (see **Animation mode** below).
+Data flow is one-shot snapshot: `App` owns the *current* `fractalId`, `params`, and `useCrosshair` (all controlled props on `ControlPanel`), plus the most recent **submitted** `RenderRequest` (`{ id, fractalId, params, animation }`) and a `rendering` flag. `ControlPanel` keeps its own internal state for animation-mode inputs and preset selection. `FractalCanvas` reacts to `request` changes and dispatches the render(s) to a Web Worker. The `id` (a `Date.now()` value) ensures identical-param resubmits still fire a new render, and also doubles as a stale-result guard for worker responses. When `animation` is non-null, `FractalCanvas` expands the request into N per-frame renders (see **Animation mode** below). The crosshair feature (see below) is the reason params are lifted — drag interactions on the canvas need to write back into `centerX`/`centerY`.
 
 Four layers, each in a flat file under `src/`:
 
@@ -58,6 +58,16 @@ That's it — no other files need changes. The worker and `FractalCanvas` are fr
 4. **Teardown** — on a new request or unmount, `stopPlayback` clears the interval, cancels the in-flight RAF, and resets `priorFrameRef`; `closeBitmaps` calls `.close()` on every stored `ImageBitmap`. The `requestId` guard in `onmessage` discards any late frame from a superseded animation (`bitmap.close()`).
 
 Only Mandelbrot, Julia, Burning Ship, and Newton use the `zoom` param — animating Sierpinski or Barnsley Fern produces N identical frames since their renderers ignore zoom.
+
+### Crosshair
+
+`ControlPanel` renders a "Use Crosshair" toggle inside the Parameters section, inlined just before the `centerX` param via `{p.key === 'centerX' && <toggle/>}` inside the `fractal.params.map(...)`. Effect: the toggle is only visible for fractals that have a `centerX` param (Mandelbrot, Julia, Burning Ship). The toggle state (`useCrosshair`) lives in `App` and is **auto-disabled inside `handleGenerate`** on every Generate — the user re-enables it after each render.
+
+When on, `App` passes a `crosshair` config to `FractalCanvas` with `currentX/Y` (from current params) and `renderedX/Y/Zoom` used as the screen-coordinate viewport reference. Reference selection: rendered request if it matches the current `fractalId`, otherwise current params (this lets the crosshair appear at screen center even before the first render — without this fallback, toggling on with `request === null` would render nothing).
+
+`FractalCanvas` draws two absolutely-positioned bars inside `.canvas-area` as siblings of the canvas. Pixel position uses the same mapping as the renderers (`dxPerPx = 4 / renderedZoom / width`, square pixels). Each bar is a 14px-wide invisible hit area with a 2px-wide colored line via `::before` — easier to grab than a 2px target.
+
+**Drag stability**: each bar captures a `dragViewportRef` snapshot of the reference viewport at `pointerdown` and uses that snapshot for all `pointermove` math until `pointerup`. This snapshot is essential in the no-render fallback case: there `renderedX = currentX`, so on every `onChange` the reference would shift with the param, and the bar would never visually follow the cursor.
 
 ### User presets
 

@@ -20,19 +20,36 @@ interface FractalRenderedMessage {
   };
 }
 
+export interface CrosshairConfig {
+  currentX: number;
+  currentY: number;
+  renderedX: number;
+  renderedY: number;
+  renderedZoom: number;
+  onChange: (centerX: number, centerY: number) => void;
+}
+
 interface FractalCanvasProps {
   request: RenderRequest | null;
   onRenderingChange?: (rendering: boolean) => void;
+  crosshair?: CrosshairConfig | null;
 }
 
 const PLAYBACK_INTERVAL_MS = 1000; // 1 fps
 const FRAME_FADE_MS = 200;
 
-export function FractalCanvas({ request, onRenderingChange }: FractalCanvasProps) {
+export function FractalCanvas({
+  request,
+  onRenderingChange,
+  crosshair = null,
+}: FractalCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const workerRef = useRef<Worker | null>(null);
   const latestRequestIdRef = useRef<number>(0);
+  const dragAxisRef = useRef<'x' | 'y' | null>(null);
+  const dragViewportRef = useRef<{ x: number; y: number; zoom: number } | null>(null);
+  const [canvasSize, setCanvasSize] = useState({ w: 0, h: 0 });
 
   // Animation orchestration
   const framePayloadsRef = useRef<{ fractalId: string; params: ParamValues }[]>([]);
@@ -60,6 +77,7 @@ export function FractalCanvas({ request, onRenderingChange }: FractalCanvasProps
         canvas.width = w;
         canvas.height = h;
       }
+      setCanvasSize(prev => (prev.w === w && prev.h === h ? prev : { w, h }));
     };
     sync();
 
@@ -285,9 +303,74 @@ export function FractalCanvas({ request, onRenderingChange }: FractalCanvasProps
     onRenderingChange?.(rendering);
   }, [rendering, onRenderingChange]);
 
+  let crosshairPx: { x: number; y: number } | null = null;
+  if (crosshair && canvasSize.w > 0 && canvasSize.h > 0 && crosshair.renderedZoom > 0) {
+    const dxPerPx = 4 / crosshair.renderedZoom / canvasSize.w;
+    crosshairPx = {
+      x: canvasSize.w / 2 + (crosshair.currentX - crosshair.renderedX) / dxPerPx,
+      y: canvasSize.h / 2 - (crosshair.currentY - crosshair.renderedY) / dxPerPx,
+    };
+  }
+
+  const makeDragHandlers = (axis: 'x' | 'y') => ({
+    onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!crosshair) return;
+      e.preventDefault();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      dragAxisRef.current = axis;
+      dragViewportRef.current = {
+        x: crosshair.renderedX,
+        y: crosshair.renderedY,
+        zoom: crosshair.renderedZoom,
+      };
+    },
+    onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => {
+      if (dragAxisRef.current !== axis || !crosshair) return;
+      const vp = dragViewportRef.current;
+      if (!vp || vp.zoom <= 0) return;
+      const container = containerRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      const dxPerPx = 4 / vp.zoom / rect.width;
+      if (axis === 'x') {
+        const newX = vp.x + (e.clientX - rect.left - rect.width / 2) * dxPerPx;
+        crosshair.onChange(newX, crosshair.currentY);
+      } else {
+        const newY = vp.y - (e.clientY - rect.top - rect.height / 2) * dxPerPx;
+        crosshair.onChange(crosshair.currentX, newY);
+      }
+    },
+    onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => {
+      if (dragAxisRef.current === axis) {
+        dragAxisRef.current = null;
+        dragViewportRef.current = null;
+        try {
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        } catch {
+          // pointer may already be released
+        }
+      }
+    },
+  });
+
   return (
     <div className="canvas-area" ref={containerRef}>
       <canvas ref={canvasRef} className="fractal-canvas" />
+      {crosshair && crosshairPx && (
+        <>
+          <div
+            className="crosshair-bar crosshair-vertical"
+            style={{ left: `${crosshairPx.x}px` }}
+            {...makeDragHandlers('x')}
+          />
+          <div
+            className="crosshair-bar crosshair-horizontal"
+            style={{ top: `${crosshairPx.y}px` }}
+            {...makeDragHandlers('y')}
+          />
+        </>
+      )}
       {!request && (
         <div className="canvas-hint">
           <div className="canvas-hint-line">// awaiting parameters</div>
